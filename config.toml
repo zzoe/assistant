@@ -1,0 +1,5 @@
+[excel]
+    insheet = "刷卡记录"
+    template = "template.xlsx"
+    outsheet = "考勤结算情况"
+    outpath = "考勤表.xlsx"
