@@ -10,9 +10,9 @@ import (
 )
 
 type Record struct {
-	JobNum   int
-	Name     string
-	Times    []string
+	JobNum int
+	Name   string
+	Times  []string
 }
 
 type RecordModel struct {
@@ -20,53 +20,54 @@ type RecordModel struct {
 	walk.SorterBase
 	sortColumn int
 	sortOrder  walk.SortOrder
-	items []*Record
+	items      []*Record
 }
 
-func (m *RecordModel) RowCount() int{
+func (m *RecordModel) RowCount() int {
 	return len(m.items)
 }
 
-func (m *RecordModel)Value(row, col int) interface{}{
-	if len(m.items) < row +1 {
+func (m *RecordModel) Value(row, col int) interface{} {
+	if len(m.items) < row+1 {
 		return nil
 	}
 
-	switch col{
+	switch col {
 	case 0:
 		return m.items[row].JobNum
 	case 1:
 		return m.items[row].Name
 	}
 
-	if len(m.items[row].Times) < col-1{
+	if len(m.items[row].Times) < col-1 {
 		return nil
 	}
 
-	return m.items[row].Times[col -2]
+	return m.items[row].Times[col-2]
 }
 
-func (m *RecordModel)ReadFromExcel(filePath string) (err error){
+func (m *RecordModel) ReadFromExcel(filePath string) (err error) {
 	xlsx, err := excelize.OpenFile(filePath)
 	if err != nil {
 		log.Error("读取 excel 文件失败", zap.Error(err))
 		return
 	}
 
+	//todo 换成map
 	records := make([]*Record, 0)
 	idx := 0
 	rows := xlsx.GetRows(viper.GetString("excel.insheet"))
 	for i, row := range rows {
-		if i< 4{
+		if i < 4 {
 			continue
 		}
 
-		if i%2 == 0{
-			if len(records) < idx + 1{
+		if i%2 == 0 {
+			if len(records) < idx+1 {
 				records = append(records, new(Record))
 			}
 			records[idx].JobNum, err = strconv.Atoi(row[2])
-			if err != nil{
+			if err != nil {
 				log.Error("工号有误", zap.Int("i", i), zap.String("row", strings.Join(row, " ")), zap.Error(err))
 				return
 			}
@@ -74,7 +75,7 @@ func (m *RecordModel)ReadFromExcel(filePath string) (err error){
 			continue
 		}
 
-		if strings.TrimSpace(strings.Join(row, "")) == ""{
+		if strings.TrimSpace(strings.Join(row, "")) == "" {
 			continue
 		}
 

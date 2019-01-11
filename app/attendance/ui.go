@@ -43,11 +43,11 @@ func icon() (icon *walk.Icon) {
 	return
 }
 
-func create(a *Attendance) *declarative.MainWindow{
+func create(a *Attendance) *declarative.MainWindow {
 	return &declarative.MainWindow{
 		Title:    "Attendance statistics",
 		Icon:     icon(),
-		Size: declarative.Size{Width:800, Height:600},
+		Size:     declarative.Size{Width: 800, Height: 600},
 		AssignTo: &a.mw,
 
 		Layout: declarative.VBox{},
@@ -60,17 +60,17 @@ func create(a *Attendance) *declarative.MainWindow{
 					},
 					declarative.TextLabel{
 						AssignTo: &a.tl,
-						Text: a.FilePath,
+						Text:     a.FilePath,
 					},
 					declarative.PushButton{
-						Text:"导出考勤",
+						Text:      "导出考勤",
 						OnClicked: a.onClicked(),
 					},
 				},
 			},
 			declarative.TableView{
-				AssignTo: &a.tv,
-				Model: a.rcModel,
+				AssignTo:              &a.tv,
+				Model:                 a.rcModel,
 				AlternatingRowBGColor: walk.RGB(239, 239, 239),
 			},
 		},

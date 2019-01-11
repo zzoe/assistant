@@ -1,23 +1,26 @@
 package attendance
 
 import (
+	"context"
 	"github.com/360EntSecGroup-Skylar/excelize"
 	"github.com/lxn/walk"
 	"github.com/lxn/walk/declarative"
 	"github.com/spf13/viper"
+	"github.com/zzoe/assistant/format"
+	"github.com/zzoe/assistant/util"
 	"go.uber.org/zap"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
 type Attendance struct {
-	mw *walk.MainWindow
-	tl *walk.TextLabel
-	tv *walk.TableView
+	mw       *walk.MainWindow
+	tl       *walk.TextLabel
+	tv       *walk.TableView
 	FilePath string
-	rcModel *RecordModel
+	rcModel  *RecordModel
 }
-
 
 func New() (a *Attendance) {
 	a = new(Attendance)
@@ -36,12 +39,13 @@ func (a *Attendance) onDropFiles() func(filePaths []string) {
 				log.Error("a.fp.SetText(a.FilePath)", zap.String("a.FilePath", a.FilePath), zap.Error(err))
 			}
 
+			viper.GetStringMapString("")
 			//a.rcModel.items = []*Record{
 			//	&Record{JobNum:1, Name:"张三", Times: []string{"08:00", "18:00","08:00", "18:00"}},
 			//	&Record{JobNum:2, Name:"李四", Times: []string{"08:01", "18:01","08:00", "18:00"}},
 			//	&Record{JobNum:3, Name:"王五", Times: []string{"08:02", "18:02","08:00", "18:00"}},
 			//}
-			if err := a.rcModel.ReadFromExcel(a.FilePath); err != nil{
+			if err := a.rcModel.ReadFromExcel(a.FilePath); err != nil {
 				log.Error("读取考勤文件失败", zap.Error(err))
 				return
 			}
@@ -50,47 +54,50 @@ func (a *Attendance) onDropFiles() func(filePaths []string) {
 	}
 }
 
-func (a *Attendance) onClicked()func(){
+func (a *Attendance) onClicked() func() {
 	return func() {
-		if len(a.rcModel.items) < 1{
+		if len(a.rcModel.items) < 1 {
 			return
 		}
 
-		xlsx, err := excelize.OpenFile(viper.GetString("excel.template"))
-		if err != nil{
-			log.Error("打开 excel 模板失败",zap.String("template", viper.GetString("excel.template")), zap.Error(err))
+		outPath := make(chan string, 1)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		defer close(outPath)
+
+		go a.saveAs(ctx, outPath)
+
+		dlg := new(walk.FileDialog)
+		dlg.InitialDirPath = filepath.Dir(a.FilePath)
+		dlg.Title = "另存为考勤表"
+		dlg.Filter = "*.xlsx"
+
+		accepted, err := dlg.ShowSave(a.mw)
+		if err != nil {
+			cancel()
+			log.Error("选择导出文件失败", zap.Error(err))
+			return
+		}
+		if !accepted {
+			cancel()
 			return
 		}
 
-		sheetName := viper.GetString("excel.outsheet")
-		for i, record := range a.rcModel.items{
-			xlsx.SetCellValue(sheetName, "A" + strconv.Itoa(i+3), record.JobNum)
-			xlsx.SetCellValue(sheetName, "B" + strconv.Itoa(i+3), record.Name)
-			for j,timeStamp := range record.Times{
-				col := ""
-				if j > 23{
-					j -= 26
-					col = "A"
-				}
-				col += string('C' + j)
-				xlsx.SetCellValue(sheetName, col+ strconv.Itoa(i+3), timeStamp)
-			}
+		outFile := dlg.FilePath
+		if filepath.Ext(outFile) != ".xlsx" {
+			outFile += ".xlsx"
 		}
-
-		//xlsx.SetActiveSheet(xlsx.GetSheetIndex(sheetName))
-		if err = xlsx.SaveAs(viper.GetString("excel.outpath")); err != nil{
-			log.Error("另存考勤结果失败", zap.Error(err))
-		}
+		outPath <- outFile
 	}
 }
 
-func (a *Attendance)refresh(){
-	if len(a.rcModel.items) == 0{
+func (a *Attendance) refresh() {
+	if len(a.rcModel.items) == 0 {
 		return
 	}
 
 	length := len(a.rcModel.items[0].Times)
-	a.clearCol(length+2)
+	a.clearCol(length + 2)
 	a.resetCol(length)
 
 	a.rcModel.PublishRowsReset()
@@ -106,17 +113,72 @@ func (a *Attendance) clearCol(length int) {
 	}
 }
 
-func (a *Attendance) resetCol(length int){
-	a.addCol( &declarative.TableViewColumn{Title: "JobNum"})
-	a.addCol( &declarative.TableViewColumn{Title: "Name"})
+func (a *Attendance) resetCol(length int) {
+	a.addCol(&declarative.TableViewColumn{Title: "JobNum"})
+	a.addCol(&declarative.TableViewColumn{Title: "Name"})
 
-	for i:=1; i<= length; i++{
-		a.addCol( &declarative.TableViewColumn{Title: strconv.Itoa(i)})
+	for i := 1; i <= length; i++ {
+		a.addCol(&declarative.TableViewColumn{Title: strconv.Itoa(i)})
 	}
 }
 
-func (a *Attendance) addCol(tvc *declarative.TableViewColumn){
-	if err := tvc.Create(a.tv); err != nil{
+func (a *Attendance) addCol(tvc *declarative.TableViewColumn) {
+	if err := tvc.Create(a.tv); err != nil {
 		log.Error("添加列失败", zap.Error(err))
+	}
+}
+
+func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
+	xlsx, err := excelize.OpenFile(viper.GetString("excel.template"))
+	if err != nil {
+		log.Error("打开 excel 模板失败", zap.String("template", viper.GetString("excel.template")), zap.Error(err))
+		return
+	}
+	sheetName := viper.GetString("excel.outsheet")
+	for i, record := range a.rcModel.items {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		row := strconv.Itoa(i + 3)
+		xlsx.SetCellValue(sheetName, "A"+row, record.JobNum)
+		xlsx.SetCellValue(sheetName, "B"+row, record.Name)
+		for j, timeStamp := range record.Times {
+			col := ""
+			if j > 23 {
+				j -= 26
+				col = "A"
+			}
+			col += string('C' + j)
+
+			yellowFill, err := xlsx.NewStyle(format.YellowFill)
+			util.Warn(err)
+			redFont, err := xlsx.NewStyle(format.RedFont)
+			util.Warn(err)
+			normal, err := xlsx.NewStyle(format.Normal)
+			util.Warn(err)
+
+			times := strings.Fields(timeStamp)
+			switch {
+			case len(times) == 0:
+			case len(times) == 1:
+				xlsx.SetCellStyle(sheetName, col+row, col+row, yellowFill)
+			case times[0] > "08:30" || times[len(times)-1] < "17:30":
+				xlsx.SetCellStyle(sheetName, col+row, col+row, redFont)
+			default:
+				xlsx.SetCellStyle(sheetName, col+row, col+row, normal)
+			}
+
+			xlsx.SetCellValue(sheetName, col+row, timeStamp)
+		}
+	}
+
+	outFile, ok := <-outPath
+	if ok && outFile != "" {
+		//xlsx.SetActiveSheet(xlsx.GetSheetIndex(sheetName))
+		if err = xlsx.SaveAs(outFile); err != nil {
+			log.Error("另存考勤结果失败", zap.Error(err))
+		}
 	}
 }
