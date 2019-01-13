@@ -9,6 +9,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"os"
+	"time"
 )
 
 var (
@@ -60,7 +61,11 @@ func create(a *Attendance) *declarative.MainWindow {
 					},
 					declarative.TextLabel{
 						AssignTo: &a.tl,
-						Text:     a.FilePath,
+					},
+					declarative.DateEdit{
+						AssignTo: &a.de,
+						Date:     time.Now().AddDate(0, -1, 0),
+						Format:   "yyyy-MM",
 					},
 					declarative.PushButton{
 						Text:      "导出考勤",

@@ -53,35 +53,56 @@ func (m *RecordModel) ReadFromExcel(filePath string) (err error) {
 		return
 	}
 
-	//todo 换成map
-	records := make([]*Record, 0)
-	idx := 0
+	order := viper.GetStringMap("excel.order")
+	idx := len(order)
+	records := make([]*Record, idx)
+	for i := 0; i < idx; i++ {
+		records[i] = new(Record)
+	}
+
 	rows := xlsx.GetRows(viper.GetString("excel.insheet"))
+	ok := false
+	skip := false
+	cur := 4
+	var curObj interface{}
 	for i, row := range rows {
-		if i < 4 {
+		if i < 4 || skip || strings.TrimSpace(strings.Join(row, "")) == "" {
+			skip = false
 			continue
 		}
 
 		if i%2 == 0 {
-			if len(records) < idx+1 {
-				records = append(records, new(Record))
+			name := row[10]
+			log.Info("[" + name + "]")
+			if name == "" {
+				skip = true
+				continue
 			}
-			records[idx].JobNum, err = strconv.Atoi(row[2])
+
+			curObj, ok = order[name]
+			if ok {
+				cur = int(curObj.(int64)) - 1
+			} else {
+				cur = idx
+				if len(records) <= idx {
+					records = append(records, new(Record))
+				}
+			}
+
+			records[cur].JobNum, err = strconv.Atoi(row[2])
 			if err != nil {
 				log.Error("工号有误", zap.Int("i", i), zap.String("row", strings.Join(row, " ")), zap.Error(err))
 				return
 			}
-			records[idx].Name = row[10]
+			records[cur].Name = name
 			continue
 		}
 
-		if strings.TrimSpace(strings.Join(row, "")) == "" {
-			continue
+		records[cur].Times = make([]string, len(row))
+		copy(records[cur].Times, row)
+		if !ok {
+			idx++
 		}
-
-		records[idx].Times = make([]string, len(row))
-		copy(records[idx].Times, row)
-		idx++
 	}
 
 	m.items = records

@@ -17,6 +17,7 @@ import (
 type Attendance struct {
 	mw       *walk.MainWindow
 	tl       *walk.TextLabel
+	de       *walk.DateEdit
 	tv       *walk.TableView
 	FilePath string
 	rcModel  *RecordModel
@@ -40,11 +41,6 @@ func (a *Attendance) onDropFiles() func(filePaths []string) {
 			}
 
 			viper.GetStringMapString("")
-			//a.rcModel.items = []*Record{
-			//	&Record{JobNum:1, Name:"张三", Times: []string{"08:00", "18:00","08:00", "18:00"}},
-			//	&Record{JobNum:2, Name:"李四", Times: []string{"08:01", "18:01","08:00", "18:00"}},
-			//	&Record{JobNum:3, Name:"王五", Times: []string{"08:02", "18:02","08:00", "18:00"}},
-			//}
 			if err := a.rcModel.ReadFromExcel(a.FilePath); err != nil {
 				log.Error("读取考勤文件失败", zap.Error(err))
 				return
@@ -134,6 +130,10 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 		log.Error("打开 excel 模板失败", zap.String("template", viper.GetString("excel.template")), zap.Error(err))
 		return
 	}
+
+	date := a.de.Date()
+	lastweekday := date.AddDate(0, 0, 1-date.Day()).Weekday() - 1
+
 	sheetName := viper.GetString("excel.outsheet")
 	for i, record := range a.rcModel.items {
 		select {
@@ -144,7 +144,9 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 		row := strconv.Itoa(i + 3)
 		xlsx.SetCellValue(sheetName, "A"+row, record.JobNum)
 		xlsx.SetCellValue(sheetName, "B"+row, record.Name)
+		weekday := lastweekday
 		for j, timeStamp := range record.Times {
+			weekday = (weekday + 1) % 7
 			col := ""
 			if j > 23 {
 				j -= 26
@@ -164,7 +166,9 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 			case len(times) == 0:
 			case len(times) == 1:
 				xlsx.SetCellStyle(sheetName, col+row, col+row, yellowFill)
-			case times[0] > "08:30" || times[len(times)-1] < "17:30":
+			case weekday != 6 && (times[0] > "08:30" || times[len(times)-1] < "17:30"),
+				weekday == 6 && (times[0] > "09:30" || times[len(times)-1] < "17:00"):
+				//log.Info(col+row, zap.Any("weekday", weekday), zap.String(times[0], times[len(times)-1]))
 				xlsx.SetCellStyle(sheetName, col+row, col+row, redFont)
 			default:
 				xlsx.SetCellStyle(sheetName, col+row, col+row, normal)
