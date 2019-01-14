@@ -125,16 +125,51 @@ func (a *Attendance) addCol(tvc *declarative.TableViewColumn) {
 }
 
 func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
-	xlsx, err := excelize.OpenFile(viper.GetString("excel.template"))
-	if err != nil {
-		log.Error("打开 excel 模板失败", zap.String("template", viper.GetString("excel.template")), zap.Error(err))
-		return
-	}
+	//xlsx, err := excelize.OpenFile(viper.GetString("excel.template"))
+	//if err != nil {
+	//	log.Error("打开 excel 模板失败", zap.String("template", viper.GetString("excel.template")), zap.Error(err))
+	//	return
+	//}
+	var err error
+	xlsx := excelize.NewFile()
+	sheetName := viper.GetString("excel.outsheet")
+	xlsx.NewSheet(sheetName)
+	xlsx.DeleteSheet("Sheet1")
 
 	date := a.de.Date()
 	lastweekday := date.AddDate(0, 0, 1-date.Day()).Weekday() - 1
 
-	sheetName := viper.GetString("excel.outsheet")
+	yellowFill, err := xlsx.NewStyle(format.YellowFill)
+	util.Warn(err)
+	redFont, err := xlsx.NewStyle(format.RedFont)
+	util.Warn(err)
+	normal, err := xlsx.NewStyle(format.Normal)
+	util.Warn(err)
+
+	totalCols := date.AddDate(0, 1, -date.Day()).Day() + 8
+	xlsx.SetCellStyle(sheetName, "A1",
+		excelize.ToAlphaString(totalCols)+strconv.Itoa(len(a.rcModel.items)+2), normal)
+
+	for i := 0; i < 2; i++ {
+		weekday := lastweekday
+		for j := 0; j < totalCols; j++ {
+			if i == 0 && j == 0 {
+				xlsx.SetCellValue(sheetName, "A1", "考勤表")
+				xlsx.MergeCell(sheetName, "A1", "B1")
+				j++
+			}
+
+			if 1 < j && j < totalCols-6 {
+				if i == 0 {
+					weekday = (weekday + 1) % 7
+					xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"1", weekday.String())
+				} else {
+					xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"2", j-1)
+				}
+			}
+		}
+	}
+
 	for i, record := range a.rcModel.items {
 		select {
 		case <-ctx.Done():
@@ -147,19 +182,12 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 		weekday := lastweekday
 		for j, timeStamp := range record.Times {
 			weekday = (weekday + 1) % 7
-			col := ""
-			if j > 23 {
-				j -= 26
-				col = "A"
-			}
-			col += string('C' + j)
-
-			yellowFill, err := xlsx.NewStyle(format.YellowFill)
-			util.Warn(err)
-			redFont, err := xlsx.NewStyle(format.RedFont)
-			util.Warn(err)
-			normal, err := xlsx.NewStyle(format.Normal)
-			util.Warn(err)
+			col := excelize.ToAlphaString(j + 2)
+			//if j > 23 {
+			//	j -= 26
+			//	col = "A"
+			//}
+			//col += string('C' + j)
 
 			times := strings.Fields(timeStamp)
 			switch {

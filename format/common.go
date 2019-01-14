@@ -32,9 +32,10 @@ var (
 			Color:  "#000000",
 		},
 		Alignment: Alignment{
-			Horizontal: "center",
-			Vertical:   "center",
-			WrapText:   true,
+			Horizontal:  "center",
+			Vertical:    "center",
+			WrapText:    true,
+			ShrinkToFit: true,
 		},
 	})
 
@@ -74,9 +75,10 @@ var (
 			Color:  "#000000",
 		},
 		Alignment: Alignment{
-			Horizontal: "center",
-			Vertical:   "center",
-			WrapText:   true,
+			Horizontal:  "center",
+			Vertical:    "center",
+			WrapText:    true,
+			ShrinkToFit: true,
 		},
 	})
 
@@ -111,9 +113,10 @@ var (
 			Color:  "#FF0000",
 		},
 		Alignment: Alignment{
-			Horizontal: "center",
-			Vertical:   "center",
-			WrapText:   true,
+			Horizontal:  "center",
+			Vertical:    "center",
+			WrapText:    true,
+			ShrinkToFit: true,
 		},
 	})
 )
