@@ -24,7 +24,7 @@ func Run() (int, error) {
 }
 
 func icon() (icon *walk.Icon) {
-	iconFile, err := os.Open("vim-go.png")
+	iconFile, err := os.Open("icon.png")
 	if err != nil {
 		log.Warn("icon 图片解析失败", zap.Error(err))
 		return
