@@ -59,8 +59,12 @@ func create(a *Attendance) *declarative.MainWindow {
 					declarative.Label{
 						Text: "文件路径:",
 					},
-					declarative.TextLabel{
-						AssignTo: &a.tl,
+					declarative.LineEdit{
+						AssignTo: &a.le,
+						OnEditingFinished: func() {
+							fn := a.onDropFiles()
+							fn([]string{a.le.Text()})
+						},
 					},
 					declarative.DateEdit{
 						AssignTo: &a.de,

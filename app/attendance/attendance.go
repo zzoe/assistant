@@ -6,6 +6,7 @@ import (
 	"github.com/lxn/walk"
 	"github.com/lxn/walk/declarative"
 	"github.com/spf13/viper"
+	"github.com/zzoe/assistant/define"
 	"github.com/zzoe/assistant/format"
 	"github.com/zzoe/assistant/util"
 	"go.uber.org/zap"
@@ -16,7 +17,7 @@ import (
 
 type Attendance struct {
 	mw       *walk.MainWindow
-	tl       *walk.TextLabel
+	le       *walk.LineEdit
 	de       *walk.DateEdit
 	tv       *walk.TableView
 	FilePath string
@@ -36,7 +37,7 @@ func (a *Attendance) onDropFiles() func(filePaths []string) {
 			log.Info(strings.Join(filePaths, " "))
 			a.FilePath = filePaths[0]
 
-			if err := a.tl.SetText(a.FilePath); err != nil {
+			if err := a.le.SetText(a.FilePath); err != nil {
 				log.Error("a.fp.SetText(a.FilePath)", zap.String("a.FilePath", a.FilePath), zap.Error(err))
 			}
 
@@ -125,11 +126,6 @@ func (a *Attendance) addCol(tvc *declarative.TableViewColumn) {
 }
 
 func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
-	//xlsx, err := excelize.OpenFile(viper.GetString("excel.template"))
-	//if err != nil {
-	//	log.Error("打开 excel 模板失败", zap.String("template", viper.GetString("excel.template")), zap.Error(err))
-	//	return
-	//}
 	var err error
 	xlsx := excelize.NewFile()
 	sheetName := viper.GetString("excel.outsheet")
@@ -150,26 +146,23 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 	xlsx.SetCellStyle(sheetName, "A1",
 		excelize.ToAlphaString(totalCols)+strconv.Itoa(len(a.rcModel.items)+2), normal)
 
-	for i := 0; i < 2; i++ {
-		weekday := lastweekday
-		for j := 0; j < totalCols; j++ {
-			if i == 0 && j == 0 {
-				xlsx.SetCellValue(sheetName, "A1", "考勤表")
-				xlsx.MergeCell(sheetName, "A1", "B1")
-				j++
-			}
-
-			if 1 < j && j < totalCols-6 {
-				if i == 0 {
-					weekday = (weekday + 1) % 7
-					xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"1", weekday.String())
-				} else {
-					xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"2", j-1)
-				}
-			}
-		}
+	//第一行
+	weekday := lastweekday
+	xlsx.SetCellValue(sheetName, "A1", "考勤表")
+	xlsx.MergeCell(sheetName, "A1", "B1")
+	for j := 2; j < totalCols-6; j++ {
+		weekday = (weekday + 1) % 7
+		xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"1", define.WeekdayMap[weekday])
 	}
 
+	//第二行
+	xlsx.SetCellValue(sheetName, "A2", "序号")
+	xlsx.SetCellValue(sheetName, "B2", "姓名")
+	for j := 2; j < totalCols-6; j++ {
+		xlsx.SetCellValue(sheetName, excelize.ToAlphaString(j)+"2", j-1)
+	}
+
+	//其它行
 	for i, record := range a.rcModel.items {
 		select {
 		case <-ctx.Done():
@@ -177,23 +170,22 @@ func (a *Attendance) saveAs(ctx context.Context, outPath chan string) {
 		default:
 		}
 		row := strconv.Itoa(i + 3)
-		xlsx.SetCellValue(sheetName, "A"+row, record.JobNum)
+		// 工号
+		// xlsx.SetCellValue(sheetName, "A"+row, record.JobNum)
+		// 序号
+		xlsx.SetCellValue(sheetName, "A"+row, i+1)
 		xlsx.SetCellValue(sheetName, "B"+row, record.Name)
-		weekday := lastweekday
+		weekday = lastweekday
 		for j, timeStamp := range record.Times {
 			weekday = (weekday + 1) % 7
 			col := excelize.ToAlphaString(j + 2)
-			//if j > 23 {
-			//	j -= 26
-			//	col = "A"
-			//}
-			//col += string('C' + j)
 
 			times := strings.Fields(timeStamp)
 			switch {
 			case len(times) == 0:
 			case len(times) == 1:
 				xlsx.SetCellStyle(sheetName, col+row, col+row, yellowFill)
+			case times[0] <= "15:30" && times[len(times)-1] >= "23:30":
 			case weekday != 6 && (times[0] > "08:30" || times[len(times)-1] < "17:30"),
 				weekday == 6 && (times[0] > "09:30" || times[len(times)-1] < "17:00"):
 				//log.Info(col+row, zap.Any("weekday", weekday), zap.String(times[0], times[len(times)-1]))
